@@ -21,6 +21,4 @@ contract BaseOFTAdapter is OFTAdapter {
         address _lzEndpoint,
         address _delegate
     ) OFTAdapter(_token, _lzEndpoint, _delegate) Ownable(_delegate) {}
-
-    // TODO - Revert the token transfer (send back the tokens) if the transaction on the destination chain is reverted
 }
