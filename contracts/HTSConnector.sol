@@ -15,6 +15,28 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
     bool public finiteTotalSupplyType = true;
     event TokenCreated(address indexed tokenAddress);
 
+    // Simple transfer record
+    struct LockedTransfer {
+        address sender;
+        uint256 amount;
+        bool refunded;
+    }
+
+    // Mapping of LayerZero message IDs to transfer details
+    mapping(bytes32 => LockedTransfer) public lockedTransfers;
+
+    // Events
+    event TransferLocked(
+        bytes32 indexed lzMsgId,
+        address indexed sender,
+        uint256 amount
+    );
+    event TransferRefunded(
+        bytes32 indexed lzMsgId,
+        address indexed sender,
+        uint256 amount
+    );
+
     /**
      * @dev Constructor for the HTS Connector contract.
      * @param _name The name of HTS token
@@ -135,6 +157,18 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
             "HTS: Transfer failed"
         );
 
+        // Store transfer details using LayerZero message ID
+        bytes32 lzMsgId = keccak256(
+            abi.encodePacked(_from, _amountLD, _dstEid, block.timestamp)
+        );
+        lockedTransfers[lzMsgId] = LockedTransfer({
+            sender: _from,
+            amount: _amountLD,
+            refunded: false
+        });
+
+        emit TransferLocked(lzMsgId, _from, _amountLD);
+
         (int256 response, ) = HederaTokenService.burnToken(
             htsTokenAddress,
             int64(uint64(amountSentLD)),
@@ -185,5 +219,34 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
         );
 
         return _amountLD;
+    }
+
+    /**
+     * @notice Refunds a failed cross-chain transfer
+     * @dev Only the contract owner can call this function
+     * @param lzMsgId The LayerZero message ID for the failed transfer
+     */
+    function refundLockedTransfer(bytes32 lzMsgId) external {
+        LockedTransfer storage locked = lockedTransfers[lzMsgId];
+
+        require(locked.sender != address(0), "Transfer does not exist");
+        require(!locked.refunded, "Already refunded");
+
+        // Mark as refunded first to prevent reentrancy
+        locked.refunded = true;
+
+        // Return tokens to original sender
+        int256 transferResponse = HederaTokenService.transferToken(
+            htsTokenAddress,
+            address(this),
+            locked.sender,
+            int64(uint64(locked.amount))
+        );
+        require(
+            transferResponse == HederaTokenService.SUCCESS_CODE,
+            "HTS: Refund transfer failed"
+        );
+
+        emit TransferRefunded(lzMsgId, locked.sender, locked.amount);
     }
 }

@@ -13,10 +13,10 @@ echo "=== Step 2: Wiring OApp with LayerZero ==="
 # Using 'yes' to automatically answer 'y' to prompts
 yes y | npx hardhat lz:oapp:wire --oapp-config layerzero.config.ts
 
-# echo "=== Step 3: Sending tokens from Avalanche to Hedera ==="
-# npx hardhat run scripts/send-adapter.ts --network avalanche-testnet
+echo "=== Step 3: Sending tokens from Avalanche to Hedera ==="
+npx hardhat run scripts/send-adapter.ts --network avalanche-testnet
 
-# echo "=== Step 3: Testing Hedera transfer ==="
-# npx hardhat run scripts/test-hedera-transfer.ts --network hedera-testnet
+echo "=== Step 3: Testing Hedera transfer ==="
+npx hardhat run scripts/test-hedera-transfer.ts --network hedera-testnet
 
 echo "=== All steps completed successfully! ===" 
