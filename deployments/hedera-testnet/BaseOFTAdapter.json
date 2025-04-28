@@ -1,18 +1,12 @@
 {
-  "address": "0x00000000000000000000000000000000005a47f8",
-  "contractId": "0.0.5916664",
+  "address": "0x7557c1518218549129f08CdAb7C28F8C6c54D7A1",
   "abi": [
     {
       "inputs": [
         {
-          "internalType": "string",
-          "name": "_name",
-          "type": "string"
-        },
-        {
-          "internalType": "string",
-          "name": "_symbol",
-          "type": "string"
+          "internalType": "address",
+          "name": "_token",
+          "type": "address"
         },
         {
           "internalType": "address",
@@ -21,11 +15,11 @@
         },
         {
           "internalType": "address",
-          "name": "_delegate",
+          "name": "_owner",
           "type": "address"
         }
       ],
-      "stateMutability": "payable",
+      "stateMutability": "nonpayable",
       "type": "constructor"
     },
     {
@@ -172,25 +166,6 @@
       ],
       "name": "SlippageExceeded",
       "type": "error"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": false,
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        },
-        {
-          "indexed": false,
-          "internalType": "bytes",
-          "name": "",
-          "type": "bytes"
-        }
-      ],
-      "name": "CallResponseEvent",
-      "type": "event"
     },
     {
       "anonymous": false,
@@ -352,19 +327,6 @@
         }
       ],
       "name": "PreCrimeSet",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "tokenAddress",
-          "type": "address"
-        }
-      ],
-      "name": "TokenCreated",
       "type": "event"
     },
     {
@@ -566,32 +528,6 @@
           "internalType": "bytes",
           "name": "enforcedOption",
           "type": "bytes"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "finiteTotalSupplyType",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
-      "stateMutability": "view",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "htsTokenAddress",
-      "outputs": [
-        {
-          "internalType": "address",
-          "name": "",
-          "type": "address"
         }
       ],
       "stateMutability": "view",
@@ -1444,11 +1380,5 @@
       "stateMutability": "nonpayable",
       "type": "function"
     }
-  ],
-  "args": [
-    "Test token",
-    "testTC",
-    "0xbD672D1562Dd32C23B563C989d8140122483631d",
-    "0xbe058ee0884696653e01cfc6f34678f2762d84db"
   ]
 }
