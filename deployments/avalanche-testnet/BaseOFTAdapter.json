@@ -1,5 +1,5 @@
 {
-  "address": "0x0433f392Fa47F643890520E0D0E58Bc05E692B79",
+  "address": "0xeb944E6FAf15a4559605CE56634EC5d0710AB629",
   "abi": [
     {
       "inputs": [
@@ -528,6 +528,49 @@
           "internalType": "bytes",
           "name": "enforcedOption",
           "type": "bytes"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "name": "getActiveTransfersByUser",
+      "outputs": [
+        {
+          "internalType": "bytes32[]",
+          "name": "activeIds",
+          "type": "bytes32[]"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "amounts",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "name": "getTransfersByUser",
+      "outputs": [
+        {
+          "internalType": "bytes32[]",
+          "name": "",
+          "type": "bytes32[]"
         }
       ],
       "stateMutability": "view",
@@ -1118,7 +1161,7 @@
           "type": "bytes32"
         }
       ],
-      "name": "refundLockedTransfer",
+      "name": "refundTransfer",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -1378,6 +1421,30 @@
       "name": "transferOwnership",
       "outputs": [],
       "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "userTransfers",
+      "outputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "stateMutability": "view",
       "type": "function"
     }
   ]

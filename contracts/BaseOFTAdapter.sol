@@ -7,25 +7,18 @@ import {SendParam, MessagingFee, MessagingReceipt, OFTReceipt} from "@layerzerol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-/**
- * @title BaseOFTAdapter
- * @dev Base extension of LayerZero OFTAdapter that tracks cross-chain transfers
- * and allows refunding locked tokens if the destination chain mint fails.
- */
 contract BaseOFTAdapter is Ownable, OFTAdapter {
     using SafeERC20 for IERC20;
 
-    // Simple transfer record
     struct LockedTransfer {
         address sender;
         uint256 amount;
         bool refunded;
     }
 
-    // Mapping of LayerZero message IDs to transfer details
     mapping(bytes32 => LockedTransfer) public lockedTransfers;
+    mapping(address => bytes32[]) public userTransfers;
 
-    // Events
     event TransferLocked(
         bytes32 indexed lzMsgId,
         address indexed sender,
@@ -37,26 +30,12 @@ contract BaseOFTAdapter is Ownable, OFTAdapter {
         uint256 amount
     );
 
-    /**
-     * @notice Constructor
-     * @param _token The underlying ERC20 token address
-     * @param _lzEndpoint The LayerZero endpoint address
-     * @param _owner The owner address
-     */
     constructor(
         address _token,
         address _lzEndpoint,
         address _owner
     ) OFTAdapter(_token, _lzEndpoint, _owner) Ownable(_owner) {}
 
-    /**
-     * @notice Overridden send function to track locked transfers
-     * @param _sendParam The parameters for the send operation
-     * @param _fee The messaging fee details
-     * @param _refundAddress The address to receive any excess funds
-     * @return msgReceipt The LayerZero message receipt
-     * @return oftReceipt The OFT receipt information
-     */
     function send(
         SendParam calldata _sendParam,
         MessagingFee calldata _fee,
@@ -64,46 +43,73 @@ contract BaseOFTAdapter is Ownable, OFTAdapter {
     )
         external
         payable
-        virtual
         override
         returns (
             MessagingReceipt memory msgReceipt,
             OFTReceipt memory oftReceipt
         )
     {
-        // Execute the standard OFT send operation
         (msgReceipt, oftReceipt) = _send(_sendParam, _fee, _refundAddress);
 
-        // Store transfer details using LayerZero message ID
-        bytes32 lzMsgId = msgReceipt.guid;
-        lockedTransfers[lzMsgId] = LockedTransfer({
+        bytes32 id = msgReceipt.guid;
+        lockedTransfers[id] = LockedTransfer({
             sender: msg.sender,
             amount: _sendParam.amountLD,
             refunded: false
         });
+        userTransfers[msg.sender].push(id);
 
-        emit TransferLocked(lzMsgId, msg.sender, _sendParam.amountLD);
-
+        emit TransferLocked(id, msg.sender, _sendParam.amountLD);
         return (msgReceipt, oftReceipt);
     }
 
-    /**
-     * @notice Refunds a failed cross-chain transfer
-     * @dev Only the contract owner can call this function
-     * @param lzMsgId The LayerZero message ID for the failed transfer
-     */
-    function refundLockedTransfer(bytes32 lzMsgId) external onlyOwner {
-        LockedTransfer storage locked = lockedTransfers[lzMsgId];
+    /// @notice Refund a failed transfer by its LayerZero message ID
+    function refundTransfer(bytes32 lzMsgId) external onlyOwner {
+        LockedTransfer storage lt = lockedTransfers[lzMsgId];
+        require(lt.sender != address(0), "Nonexistent transfer");
+        require(!lt.refunded, "Already refunded");
 
-        require(locked.sender != address(0), "Transfer does not exist");
-        require(!locked.refunded, "Already refunded");
+        lt.refunded = true;
+        IERC20(token()).safeTransfer(lt.sender, lt.amount);
 
-        // Mark as refunded first to prevent reentrancy
-        locked.refunded = true;
+        emit TransferRefunded(lzMsgId, lt.sender, lt.amount);
+    }
 
-        // Return tokens to original sender
-        IERC20(token()).safeTransfer(locked.sender, locked.amount);
+    /// @notice List of all transfers (including refunded) for a user
+    function getTransfersByUser(
+        address user
+    ) external view returns (bytes32[] memory) {
+        return userTransfers[user];
+    }
 
-        emit TransferRefunded(lzMsgId, locked.sender, locked.amount);
+    /// @notice Only active (non-refunded) transfers for a user
+    function getActiveTransfersByUser(
+        address user
+    )
+        external
+        view
+        returns (bytes32[] memory activeIds, uint256[] memory amounts)
+    {
+        bytes32[] memory all = userTransfers[user];
+        uint256 total = all.length;
+        // temp arrays sized to total
+        activeIds = new bytes32[](total);
+        amounts = new uint256[](total);
+        uint256 cnt;
+
+        for (uint i = 0; i < total; ++i) {
+            bytes32 id = all[i];
+            if (!lockedTransfers[id].refunded) {
+                activeIds[cnt] = id;
+                amounts[cnt] = lockedTransfers[id].amount;
+                cnt++;
+            }
+        }
+
+        // shrink arrays to actual count
+        assembly {
+            mstore(activeIds, cnt)
+            mstore(amounts, cnt)
+        }
     }
 }

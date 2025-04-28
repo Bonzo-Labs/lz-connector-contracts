@@ -3,6 +3,9 @@
 # Set the script to exit immediately if any command fails
 set -e
 
+echo "=== Step 0: Compiling contracts ==="
+npm run compile
+
 echo "=== Step 1: Deploying OFT adapter on avalanche-testnet ==="
 npx hardhat run deploy/NewOFTAdapter.ts --network avalanche-testnet
 

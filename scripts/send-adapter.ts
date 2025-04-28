@@ -47,7 +47,7 @@ function getDeployedAddresses() {
 async function main() {
 	// Example parameters - modify these as needed
 	const fromNetwork = "avalanche" as const;
-	const amount = "18.56"; // Amount to send
+	const amount = "18"; // Amount to send
 
 	// Validate fromNetwork
 	if (!["avalanche", "arbitrum", "hedera"].includes(fromNetwork)) {
