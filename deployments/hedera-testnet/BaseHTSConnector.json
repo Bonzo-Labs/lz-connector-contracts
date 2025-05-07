@@ -1,6 +1,6 @@
 {
-  "address": "0x00000000000000000000000000000000005a4d32",
-  "contractId": "0.0.5918002",
+  "address": "0x00000000000000000000000000000000005af565",
+  "contractId": "0.0.5961061",
   "abi": [
     {
       "inputs": [
@@ -495,6 +495,30 @@
     {
       "inputs": [
         {
+          "internalType": "address",
+          "name": "_from",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "burn",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "success",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
           "internalType": "uint32",
           "name": "_eid",
           "type": "uint32"
@@ -866,6 +890,30 @@
       "name": "lzReceiveSimulate",
       "outputs": [],
       "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_to",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "mint",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "success",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
       "type": "function"
     },
     {

@@ -11,15 +11,6 @@ interface Args {
 	network: "avalanche" | "arbitrum";
 }
 
-function getDeployedAddresses() {
-	const deploymentsDir = path.join(__dirname, "..", "deployments");
-	const hederaDeployment = JSON.parse(fs.readFileSync(path.join(deploymentsDir, "hedera-testnet", "WHBAR.json"), "utf8"));
-
-	return {
-		hedera: hederaDeployment,
-	};
-}
-
 async function main() {
 	const amount = "10.1"; // Amount to mint in HBAR
 
@@ -36,9 +27,7 @@ async function main() {
 
 	client.setOperator(operatorId, operatorKey);
 
-	const deployedAddresses = getDeployedAddresses();
-	const whbarDeployment = await deployments.get("WHBAR");
-	const whbarAddress = whbarDeployment.address;
+	const whbarAddress = "0xb1f616b8134f602c3bb465fb5b5e6565ccad37ed";
 	const whbarContractId = "0.0.5816542";
 
 	// Convert amount to tinybars (1 HBAR = 100,000,000 tinybars)

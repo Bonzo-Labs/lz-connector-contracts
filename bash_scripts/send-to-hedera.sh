@@ -16,5 +16,4 @@ yes y | npx hardhat lz:oapp:wire --oapp-config layerzero.config.ts
 echo "=== Step 3: Sending tokens from Avalanche to Hedera ==="
 npx hardhat run scripts/send-adapter.ts --network avalanche-testnet
 
-
 echo "=== All steps completed successfully! ===" 
