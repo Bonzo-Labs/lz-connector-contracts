@@ -1,114 +1,150 @@
-import { Client, AccountId, PrivateKey, ContractFunctionParameters, Hbar, ContractCreateFlow, ContractId } from "@hashgraph/sdk";
+import hre from "hardhat";
 import { EndpointId } from "@layerzerolabs/lz-definitions";
 import * as fs from "fs";
 import * as path from "path";
-import { ethers } from "ethers";
-import "dotenv/config";
+import { HttpNetworkConfig } from "hardhat/types";
 
-// WHBAR token address on Hedera testnet
-const WHBAR_TOKEN_ADDRESS = "0xb1f616b8134f602c3bb465fb5b5e6565ccad37ed"; // TODO: Replace with actual WHBAR token address
+interface CustomNetworkConfig extends HttpNetworkConfig {
+	eid?: number;
+	oapp?: string;
+}
+
+const WHBAR_TOKEN_ADDRESS = "0xb1f616b8134f602c3bb465fb5b5e6565ccad37ed";
 
 // Map of endpoint addresses
 const endpointAddresses: Record<number, string> = {
 	[EndpointId.HEDERA_V2_TESTNET]: "0xbD672D1562Dd32C23B563C989d8140122483631d",
 };
 
+async function getContractAddress(networkName: string, contractName: string): Promise<string> {
+	const deploymentDir = path.join("deployments", networkName);
+	const contractPath = path.join(deploymentDir, `${contractName}.json`);
+
+	if (!fs.existsSync(contractPath)) {
+		throw new Error(`${contractName} deployment file not found for network ${networkName}. Please deploy ${contractName} first.`);
+	}
+
+	const contractData = JSON.parse(fs.readFileSync(contractPath, "utf8"));
+	if (!contractData.address) {
+		throw new Error(`${contractName} address not found in deployment file for network ${networkName}`);
+	}
+
+	return contractData.address;
+}
+
+async function updateNetworkConfig(networkName: string, networkConfig: CustomNetworkConfig, myOFTAddress: string, baseOFTAdapterAddress: string) {
+	const configPath = path.join("hardhat.config.ts");
+	let configContent = fs.readFileSync(configPath, "utf8");
+
+	// Create the network configuration string
+	const networkConfigStr = `networks: {
+        ${networkName}: {
+            url: "${networkConfig.url}",
+            eid: ${networkConfig.eid},
+            oapp: "${myOFTAddress}",
+            oftAdapter: "${baseOFTAdapterAddress}"
+        }
+    }`;
+
+	// Replace the existing network configuration
+	const networkRegex = new RegExp(`networks:\\s*{[^}]*${networkName}[^}]*}`);
+	configContent = configContent.replace(networkRegex, networkConfigStr);
+
+	// Write the updated configuration back to the file
+	fs.writeFileSync(configPath, configContent);
+	console.log(`Updated network configuration for ${networkName}`);
+}
+
 async function main() {
-	console.log("🚀 Deploying BaseOFTAdapter to Hedera Testnet...");
+	const { ethers, network, config } = hre;
+	const [signer] = await ethers.getSigners();
+	const signerAddress = await signer.getAddress();
+	console.log("Deploying with account:", signerAddress);
 
-	// Get operator info from environment variables
-	const operatorId = AccountId.fromString(process.env.ACCOUNT_ID_HEDERA || "");
-	const operatorKey = PrivateKey.fromStringECDSA(process.env.PRIVATE_KEY_HEDERA || "");
+	// Get current network name
+	const currentNetworkName = network.name;
+	console.log(`\nDeploying to network: ${currentNetworkName}`);
 
-	// Initialize Hedera client
-	const client = Client.forTestnet();
-	client.setOperator(operatorId, operatorKey);
+	const networkConfig = config.networks?.[currentNetworkName] as CustomNetworkConfig;
+	const endpointId = networkConfig?.eid;
 
-	// Read contract bytecode and ABI from artifacts
-	const artifactPath = path.join("artifacts", "contracts", "BaseOFTAdapter.sol", "BaseOFTAdapter.json");
-	const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
-	const bytecode = artifact.bytecode;
-	const abi = artifact.abi;
+	if (!endpointId) {
+		console.error(`No EID configured for network ${currentNetworkName}`);
+		process.exit(1);
+	}
 
-	// Convert bytecode string to Uint8Array
-	const bytecodeBytes = new Uint8Array(Buffer.from(bytecode.slice(2), "hex"));
+	console.log(`Network EID: ${endpointId}`);
 
-	console.log(`📦 Contract bytecode size: ${bytecodeBytes.length} bytes`);
-
-	// LayerZero parameters
-	const endpointId = EndpointId.HEDERA_V2_TESTNET;
 	const endpointAddress = endpointAddresses[endpointId];
+	if (!endpointAddress) {
+		console.error(`No endpoint address found for EID ${endpointId}`);
+		process.exit(1);
+	}
+
 	const delegate = "0xbe058ee0884696653e01cfc6f34678f2762d84db";
 
-	console.log(`\n--- 🌟 Deployment Parameters ---`);
-	console.log(`🔗 LayerZero Endpoint ID: ${endpointId}`);
-	console.log(`🌐 LayerZero Endpoint Address: ${endpointAddress}`);
-	console.log(`👤 Delegate Address: ${delegate}`);
-	console.log(`💰 WHBAR Token Address: ${WHBAR_TOKEN_ADDRESS}`);
-	console.log(`-----------------------------\n`);
-
 	try {
-		// Deploy the contract
-		console.log("🔨 Deploying contract...");
-		const contractCreate = new ContractCreateFlow()
-			.setGas(4000000)
-			.setBytecode(bytecode)
-			.setConstructorParameters(new ContractFunctionParameters().addAddress(WHBAR_TOKEN_ADDRESS).addAddress(endpointAddress).addAddress(delegate))
-			.setInitialBalance(new Hbar(20));
+		const BaseOFTAdapter = await ethers.getContractFactory("BaseOFTAdapter");
+		const baseOFTAdapter = await BaseOFTAdapter.deploy(WHBAR_TOKEN_ADDRESS, endpointAddress, delegate);
 
-		// Sign the transaction with the client operator key and submit to a Hedera network
-		const txResponse = await contractCreate.execute(client);
+		console.log("Transaction hash:", baseOFTAdapter.deployTransaction.hash);
+		await baseOFTAdapter.deployed();
 
-		// Get the receipt of the transaction
-		const receipt = await txResponse.getReceipt(client);
+		console.log("BaseOFTAdapter deployed to:", baseOFTAdapter.address);
+		console.log("WHBAR Token Address:", WHBAR_TOKEN_ADDRESS);
+		console.log("Token:", await baseOFTAdapter.token());
+		console.log("Endpoint Address:", endpointAddress);
 
-		// Get the new contract ID
-		const newContractId = receipt.contractId;
-
-		console.log("✅ Deployment successful!");
-		console.log(`📜 Contract ID: ${newContractId}`);
-
-		// Convert to EVM address format
-		const contractAddress = newContractId?.toSolidityAddress();
-		console.log(`🏗️ Contract EVM Address: ${contractAddress}`);
-
-		// Create ethers provider and contract instance
-		const provider = new ethers.providers.JsonRpcProvider("https://testnet.hashio.io/api");
-		const contract = new ethers.Contract(contractAddress!, abi, provider);
-
-		// Verify contract deployment
-		console.log("🔍 Verifying contract deployment...");
-		const tokenAddress = await contract.token();
-		console.log(`🔑 Token Address: ${tokenAddress}`);
-
-		// Save deployment information in the standard format
-		const deploymentInfo = {
-			address: "0x" + contractAddress,
-			contractId: newContractId?.toString(),
-			abi: abi,
-			args: [WHBAR_TOKEN_ADDRESS, endpointAddress, delegate],
-		};
-
-		// Create deployment artifacts directory if it doesn't exist
-		const deploymentDir = path.join("deployments", "hedera-testnet");
+		// Create deployment artifacts
+		const deploymentDir = path.join("deployments", currentNetworkName);
 		if (!fs.existsSync(deploymentDir)) {
 			fs.mkdirSync(deploymentDir, { recursive: true });
 		}
 
-		// Save deployment information to a JSON file
-		fs.writeFileSync(path.join(deploymentDir, "BaseOFTAdapter.json"), JSON.stringify(deploymentInfo, null, 2));
+		// Get the contract artifact to access ABI and other metadata
+		const artifact = await hre.artifacts.readArtifact("BaseOFTAdapter");
 
-		console.log(`📂 Deployment information saved to ${path.join(deploymentDir, "BaseOFTAdapter.json")}`);
+		// Save contract address and ABI
+		const contractArtifact = {
+			address: baseOFTAdapter.address,
+			abi: artifact.abi,
+		};
+		fs.writeFileSync(path.join(deploymentDir, "BaseOFTAdapter.json"), JSON.stringify(contractArtifact, null, 2));
+
+		// Save chain ID
+		const chainId = (await ethers.provider.getNetwork()).chainId;
+		fs.writeFileSync(path.join(deploymentDir, ".chainId"), chainId.toString());
+
+		// Save solc inputs
+		const solcInputsDir = path.join(deploymentDir, "solcInputs");
+		if (!fs.existsSync(solcInputsDir)) {
+			fs.mkdirSync(solcInputsDir, { recursive: true });
+		}
+
+		// Save the full artifact in solcInputs
+		fs.writeFileSync(path.join(solcInputsDir, "BaseOFTAdapter.json"), JSON.stringify(artifact, null, 2));
+
+		// Get MyOFT address and update network config
+		try {
+			const myOFTAddress = await getContractAddress(currentNetworkName, "MyOFT");
+			console.log(`Found MyOFT address for ${currentNetworkName}: ${myOFTAddress}`);
+
+			// Update network config with both MyOFT and BaseOFTAdapter addresses
+			await updateNetworkConfig(currentNetworkName, networkConfig, myOFTAddress, baseOFTAdapter.address);
+		} catch (error: any) {
+			console.error("Error updating network configuration:", error.message);
+			process.exit(1);
+		}
+
+		console.log(`Deployment completed successfully for network ${currentNetworkName}!`);
 	} catch (error) {
-		console.error("❌ Error deploying BaseOFTAdapter contract:", error);
+		console.error(`Error deploying BaseOFTAdapter on network ${currentNetworkName}:`, error);
 		process.exit(1);
 	}
 }
 
-main()
-	.then(() => process.exit(0))
-	.catch((error) => {
-		console.error("❌ Deployment failed:", error);
-		process.exit(1);
-	});
+main().catch((error) => {
+	console.error(error);
+	process.exitCode = 1;
+});
 

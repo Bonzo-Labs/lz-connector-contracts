@@ -6,28 +6,28 @@ import { OAppEnforcedOption } from "@layerzerolabs/toolbox-hardhat";
 import type { OmniPointHardhat } from "@layerzerolabs/toolbox-hardhat";
 
 // WBTC;
-const avalancheContract: OmniPointHardhat = {
-	eid: EndpointId.AVALANCHE_V2_TESTNET,
-	contractName: "BaseOFTAdapter",
-};
-const hederaContract: OmniPointHardhat = {
-	eid: EndpointId.HEDERA_V2_TESTNET,
-	contractName: "BaseHTSConnector",
-};
+// const avalancheContract: OmniPointHardhat = {
+// 	eid: EndpointId.AVALANCHE_V2_TESTNET,
+// 	contractName: "BaseOFTAdapter",
+// };
+// const hederaContract: OmniPointHardhat = {
+// 	eid: EndpointId.HEDERA_V2_TESTNET,
+// 	contractName: "BaseHTSConnector",
+// };
 const arbitrumContract: OmniPointHardhat = {
 	eid: EndpointId.ARBSEP_V2_TESTNET,
 	contractName: "MyOFT",
 };
 
-// // WHBAR
-// const avalancheContract: OmniPointHardhat = {
-// 	eid: EndpointId.AVALANCHE_V2_TESTNET,
-// 	contractName: "MyOFT",
-// };
-// const hederaContract: OmniPointHardhat = {
-// 	eid: EndpointId.HEDERA_V2_TESTNET,
-// 	contractName: "BaseOFTAdapter",
-// };
+// WHBAR
+const avalancheContract: OmniPointHardhat = {
+	eid: EndpointId.AVALANCHE_V2_TESTNET,
+	contractName: "MyOFT",
+};
+const hederaContract: OmniPointHardhat = {
+	eid: EndpointId.HEDERA_V2_TESTNET,
+	contractName: "BaseOFTAdapter",
+};
 
 // To connect all the above chains to each other, we need the following pathways:
 // Optimism <-> Avalanche

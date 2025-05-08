@@ -1,9 +1,11 @@
-import { ethers, deployments } from "hardhat";
 import { getNetworkNameForEid } from "@layerzerolabs/devtools-evm-hardhat";
 import { Signer } from "ethers";
 import fs from "fs";
 import path from "path";
 import { Client, ContractExecuteTransaction, Hbar, PrivateKey, AccountId } from "@hashgraph/sdk";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 interface Args {
 	amount: string;
@@ -50,12 +52,6 @@ async function main() {
 
 	console.log(`Transaction status: ${receipt.status}`);
 	console.log(`Transaction hash: ${txResponse.transactionHash.toString()}`);
-
-	// Using ethersjs, create a contract instance and get the balance of the operator
-	const signer = await ethers.getSigner();
-	const contract = new ethers.Contract(whbarAddress, whbarDeployment.abi, signer);
-	const balance = await contract.balanceOf(signer.address);
-	console.log(`Balance: ${balance}`);
 }
 
 main()
