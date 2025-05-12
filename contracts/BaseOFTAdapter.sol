@@ -61,6 +61,13 @@ contract BaseOFTAdapter is Ownable, Pausable, ReentrancyGuard, OFTAdapter {
     );
 
     /**
+     * @notice Emitted when old transfer records are cleared
+     * @param user Address of the user whose records are cleared
+     * @param count Number of records cleared
+     */
+    event TransferHistoryCleared(address indexed user, uint256 count);
+
+    /**
      * @dev Initializes the adapter with token and endpoint information
      * @param _token Address of the ERC20 token
      * @param _lzEndpoint Address of the LayerZero endpoint
@@ -146,6 +153,39 @@ contract BaseOFTAdapter is Ownable, Pausable, ReentrancyGuard, OFTAdapter {
         IERC20(token()).safeTransfer(lt.sender, lt.amount);
 
         emit TransferRefunded(lzMsgId, lt.sender, lt.amount);
+    }
+
+    /**
+     * @notice Removes oldest transfer records for a user to manage array growth
+     * @dev Can be called by users to clear their own history or by admins for any user
+     * @param user Address of the user whose transfer history to clear
+     * @param count Number of oldest records to remove
+     */
+    function clearOldTransferRecords(
+        address user,
+        uint256 count
+    ) external onlyOwner nonReentrant {
+        bytes32[] storage userHistory = userTransfers[user];
+        uint256 totalRecords = userHistory.length;
+
+        // Can't remove more than the total number of records
+        if (count > totalRecords) {
+            count = totalRecords;
+        }
+
+        if (count > 0) {
+            // Shift records to the left (remove oldest records first)
+            for (uint256 i = 0; i < totalRecords - count; i++) {
+                userHistory[i] = userHistory[i + count];
+            }
+
+            // Resize the array
+            assembly {
+                sstore(userHistory.slot, sub(totalRecords, count))
+            }
+
+            emit TransferHistoryCleared(user, count);
+        }
     }
 
     /**
