@@ -24,6 +24,8 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
 
     // Mapping of LayerZero message IDs to transfer details
     mapping(bytes32 => LockedTransfer) public lockedTransfers;
+    // Mapping to track user's transfers
+    mapping(address => bytes32[]) internal userTransfers;
 
     // Events
     event TransferLocked(
@@ -167,6 +169,9 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
             refunded: false
         });
 
+        // Record this transfer for the user
+        userTransfers[_from].push(lzMsgId);
+
         emit TransferLocked(lzMsgId, _from, _amountLD);
 
         (int256 response, ) = HederaTokenService.burnToken(
@@ -248,5 +253,52 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
         );
 
         emit TransferRefunded(lzMsgId, locked.sender, locked.amount);
+    }
+
+    /**
+     * @notice List of all transfers (including refunded) for a user
+     * @param user The address of the user whose transfers to retrieve
+     * @return An array of LayerZero message IDs for the user's transfers
+     */
+    function getTransfersByUser(
+        address user
+    ) external view returns (bytes32[] memory) {
+        return userTransfers[user];
+    }
+
+    /**
+     * @notice Only active (non-refunded) transfers for a user
+     * @param user The address of the user whose active transfers to retrieve
+     * @return activeIds Array of LayerZero message IDs for active transfers
+     * @return amounts Array of token amounts corresponding to each active transfer
+     */
+    function getActiveTransfersByUser(
+        address user
+    )
+        external
+        view
+        returns (bytes32[] memory activeIds, uint256[] memory amounts)
+    {
+        bytes32[] memory all = userTransfers[user];
+        uint256 total = all.length;
+        // temp arrays sized to total
+        activeIds = new bytes32[](total);
+        amounts = new uint256[](total);
+        uint256 cnt;
+
+        for (uint i = 0; i < total; ++i) {
+            bytes32 id = all[i];
+            if (!lockedTransfers[id].refunded) {
+                activeIds[cnt] = id;
+                amounts[cnt] = lockedTransfers[id].amount;
+                cnt++;
+            }
+        }
+
+        // shrink arrays to actual count
+        assembly {
+            mstore(activeIds, cnt)
+            mstore(amounts, cnt)
+        }
     }
 }
