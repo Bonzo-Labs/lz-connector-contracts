@@ -2,37 +2,66 @@
 pragma solidity ^0.8.20;
 
 import {OFTCore} from "@layerzerolabs/oft-evm/contracts/OFTCore.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./hts/HederaTokenService.sol";
 import "./hts/IHederaTokenService.sol";
 import "./hts/KeyHelper.sol";
 
 /**
  * @title HTS Connector
- * @dev HTS Connector is a HTS token that extends the functionality of the OFTCore contract.
+ * @dev A contract that extends OFTCore to create and interact with Hedera Token Service (HTS) tokens
+ * that can be bridged across chains via LayerZero
  */
-abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
+abstract contract HTSConnector is
+    OFTCore,
+    KeyHelper,
+    HederaTokenService,
+    Pausable,
+    ReentrancyGuard
+{
+    /// @notice Address of the created HTS token
     address public htsTokenAddress;
+    /// @notice Whether the token has a finite total supply
     bool public finiteTotalSupplyType = true;
+
+    /// @notice Emitted when the HTS token is created
+    /// @param tokenAddress Address of the created token
     event TokenCreated(address indexed tokenAddress);
 
-    // Simple transfer record
+    /**
+     * @dev Structure representing a locked cross-chain transfer
+     * @param sender Address that initiated the transfer
+     * @param amount Amount of tokens transferred
+     * @param refunded Whether the transfer has been refunded
+     */
     struct LockedTransfer {
         address sender;
         uint256 amount;
         bool refunded;
     }
 
-    // Mapping of LayerZero message IDs to transfer details
+    /// @dev Maps LayerZero message IDs to transfer details
     mapping(bytes32 => LockedTransfer) public lockedTransfers;
-    // Mapping to track user's transfers
+    /// @dev Maps user addresses to their transfer message IDs
     mapping(address => bytes32[]) internal userTransfers;
+    /// @dev User nonce to prevent message ID collisions
+    mapping(address => uint256) public nonces;
 
-    // Events
+    /// @notice Emitted when a cross-chain transfer is locked
+    /// @param lzMsgId LayerZero message ID
+    /// @param sender Address that initiated the transfer
+    /// @param amount Amount of tokens locked
     event TransferLocked(
         bytes32 indexed lzMsgId,
         address indexed sender,
         uint256 amount
     );
+
+    /// @notice Emitted when a locked transfer is refunded
+    /// @param lzMsgId LayerZero message ID
+    /// @param sender Address that initiated the original transfer
+    /// @param amount Amount of tokens refunded
     event TransferRefunded(
         bytes32 indexed lzMsgId,
         address indexed sender,
@@ -40,11 +69,11 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
     );
 
     /**
-     * @dev Constructor for the HTS Connector contract.
-     * @param _name The name of HTS token
-     * @param _symbol The symbol of HTS token
-     * @param _lzEndpoint The LayerZero endpoint address.
-     * @param _delegate The delegate capable of making OApp configurations inside of the endpoint.
+     * @dev Creates a new HTS token and initializes the connector
+     * @param _name Name of the token
+     * @param _symbol Symbol of the token
+     * @param _lzEndpoint Address of the LayerZero endpoint
+     * @param _delegate Address that can perform OApp configuration
      */
     constructor(
         string memory _name,
@@ -86,45 +115,36 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
             responseCode == HederaTokenService.SUCCESS_CODE,
             "Failed to create HTS token"
         );
-        // int256 transferResponse = HederaTokenService.transferToken(
-        //     tokenAddress,
-        //     address(this),
-        //     msg.sender,
-        //     1000
-        // );
-        // require(
-        //     transferResponse == HederaTokenService.SUCCESS_CODE,
-        //     "HTS: Transfer failed"
-        // );
+
         htsTokenAddress = tokenAddress;
 
         emit TokenCreated(tokenAddress);
     }
 
     /**
-     * @dev Retrieves the address of the underlying HTS implementation.
-     * @return The address of the HTS token.
+     * @notice Returns the address of the underlying token implementation
+     * @return The address of the HTS token
      */
     function token() public view returns (address) {
         return htsTokenAddress;
     }
 
     /**
-     * @notice Indicates whether the HTS Connector contract requires approval of the 'token()' to send.
-     * @return requiresApproval Needs approval of the underlying token implementation.
+     * @notice Indicates whether the contract requires token approval to send tokens
+     * @return requiresApproval False since HTS tokens don't use ERC20 approvals
      */
     function approvalRequired() external pure virtual returns (bool) {
         return false;
     }
 
     /**
-     * @dev Burns tokens from the sender's specified balance.
-     * @param _from The address to debit the tokens from.
-     * @param _amountLD The amount of tokens to send in local decimals.
-     * @param _minAmountLD The minimum amount to send in local decimals.
-     * @param _dstEid The destination chain ID.
-     * @return amountSentLD The amount sent in local decimals.
-     * @return amountReceivedLD The amount received in local decimals on the remote.
+     * @dev Processes the outgoing token transfer by burning tokens
+     * @param _from The address to debit tokens from
+     * @param _amountLD The amount of tokens to send in local decimals
+     * @param _minAmountLD The minimum amount to send in local decimals
+     * @param _dstEid The destination chain ID
+     * @return amountSentLD The amount sent in local decimals
+     * @return amountReceivedLD The amount to be received in local decimals on the remote chain
      */
     function _debit(
         address _from,
@@ -135,6 +155,8 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
         internal
         virtual
         override
+        whenNotPaused
+        nonReentrant
         returns (uint256 amountSentLD, uint256 amountReceivedLD)
     {
         require(
@@ -159,10 +181,14 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
             "HTS: Transfer failed"
         );
 
-        // Store transfer details using LayerZero message ID
+        // Store transfer details using LayerZero message ID with nonce
         bytes32 lzMsgId = keccak256(
-            abi.encodePacked(_from, _amountLD, _dstEid, block.timestamp)
+            abi.encodePacked(_from, _amountLD, _dstEid, nonces[_from])
         );
+
+        // Increment the nonce for future transfers
+        nonces[_from]++;
+
         lockedTransfers[lzMsgId] = LockedTransfer({
             sender: _from,
             amount: _amountLD,
@@ -186,17 +212,16 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
     }
 
     /**
-     * @dev Credits tokens to the specified address.
-     * @param _to The address to credit the tokens to.
-     * @param _amountLD The amount of tokens to credit in local decimals.
-     * @dev _srcEid The source chain ID.
-     * @return amountReceivedLD The amount of tokens ACTUALLY received in local decimals.
+     * @dev Processes the incoming token transfer by minting tokens
+     * @param _to The address to credit tokens to
+     * @param _amountLD The amount of tokens to credit in local decimals
+     * @return The amount of tokens actually received in local decimals
      */
     function _credit(
         address _to,
         uint256 _amountLD,
         uint32 /*_srcEid*/
-    ) internal virtual override returns (uint256) {
+    ) internal virtual override whenNotPaused nonReentrant returns (uint256) {
         require(
             _amountLD <= uint64(type(int64).max),
             "HTSConnector: amount exceeds int64 safe range"
@@ -231,7 +256,9 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
      * @dev Only the contract owner can call this function
      * @param lzMsgId The LayerZero message ID for the failed transfer
      */
-    function refundLockedTransfer(bytes32 lzMsgId) external {
+    function refundLockedTransfer(
+        bytes32 lzMsgId
+    ) external onlyOwner whenNotPaused nonReentrant {
         LockedTransfer storage locked = lockedTransfers[lzMsgId];
 
         require(locked.sender != address(0), "Transfer does not exist");
@@ -256,8 +283,8 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
     }
 
     /**
-     * @notice List of all transfers (including refunded) for a user
-     * @param user The address of the user whose transfers to retrieve
+     * @notice Retrieves all transfers (including refunded) for a user
+     * @param user The address of the user
      * @return An array of LayerZero message IDs for the user's transfers
      */
     function getTransfersByUser(
@@ -267,8 +294,8 @@ abstract contract HTSConnector is OFTCore, KeyHelper, HederaTokenService {
     }
 
     /**
-     * @notice Only active (non-refunded) transfers for a user
-     * @param user The address of the user whose active transfers to retrieve
+     * @notice Retrieves only active (non-refunded) transfers for a user
+     * @param user The address of the user
      * @return activeIds Array of LayerZero message IDs for active transfers
      * @return amounts Array of token amounts corresponding to each active transfer
      */
