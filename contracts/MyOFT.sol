@@ -39,7 +39,7 @@ contract MyOFT is OFT {
      * @param _to Address to receive the minted tokens
      * @param _amount Amount of tokens to mint
      */
-    function mint(address _to, uint256 _amount) public {
+    function mint(address _to, uint256 _amount) public onlyOwner {
         _mint(_to, _amount);
     }
 
@@ -48,7 +48,7 @@ contract MyOFT is OFT {
      * @param _from Address from which to burn tokens
      * @param _amount Amount of tokens to burn
      */
-    function burn(address _from, uint256 _amount) public {
+    function burn(address _from, uint256 _amount) public onlyOwner {
         _burn(_from, _amount);
     }
 }
