@@ -17,6 +17,9 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract BaseOFTAdapter is Ownable, Pausable, ReentrancyGuard, OFTAdapter {
     using SafeERC20 for IERC20;
 
+    /// @notice Maximum number of transfer records that can be cleared at once
+    uint256 public constant MAX_RECORDS_TO_CLEAR_AT_ONCE = 100;
+
     /**
      * @dev Structure for tracking cross-chain token transfers
      * @param sender Address that initiated the transfer
@@ -157,7 +160,7 @@ contract BaseOFTAdapter is Ownable, Pausable, ReentrancyGuard, OFTAdapter {
 
     /**
      * @notice Removes oldest transfer records for a user to manage array growth
-     * @dev Can be called by users to clear their own history or by admins for any user
+     * @dev Can be called by admins for any user
      * @param user Address of the user whose transfer history to clear
      * @param count Number of oldest records to remove
      */
@@ -165,6 +168,10 @@ contract BaseOFTAdapter is Ownable, Pausable, ReentrancyGuard, OFTAdapter {
         address user,
         uint256 count
     ) external onlyOwner nonReentrant {
+        require(
+            count <= MAX_RECORDS_TO_CLEAR_AT_ONCE,
+            "BaseOFTAdapter: Clearing too many records at once"
+        );
         bytes32[] storage userHistory = userTransfers[user];
         uint256 totalRecords = userHistory.length;
 
@@ -174,14 +181,23 @@ contract BaseOFTAdapter is Ownable, Pausable, ReentrancyGuard, OFTAdapter {
         }
 
         if (count > 0) {
-            // Shift records to the left (remove oldest records first)
-            for (uint256 i = 0; i < totalRecords - count; i++) {
-                userHistory[i] = userHistory[i + count];
+            // Create a memory array for the remaining records
+            uint256 newSize = totalRecords - count;
+            bytes32[] memory remainingRecords = new bytes32[](newSize);
+
+            // Copy the records we want to keep to memory
+            for (uint256 i = 0; i < newSize; i++) {
+                remainingRecords[i] = userHistory[i + count];
             }
 
-            // Resize the array
-            assembly {
-                sstore(userHistory.slot, sub(totalRecords, count))
+            // Clear the storage array
+            while (userHistory.length > 0) {
+                userHistory.pop();
+            }
+
+            // Push the remaining records back to storage
+            for (uint256 i = 0; i < newSize; i++) {
+                userHistory.push(remainingRecords[i]);
             }
 
             emit TransferHistoryCleared(user, count);
