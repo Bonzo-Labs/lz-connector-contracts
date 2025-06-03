@@ -47,7 +47,6 @@ contract BaseHTSConnector is Ownable, Pausable, HTSConnector {
         _unpause();
     }
 
-    // TODO - Add onlyOwner back
     /**
      * @notice Mints new tokens and sends them to the specified recipient
      * @dev Can only be called by the contract owner when not paused
@@ -58,7 +57,7 @@ contract BaseHTSConnector is Ownable, Pausable, HTSConnector {
     function mint(
         address _to,
         uint256 _amount
-    ) external whenNotPaused nonReentrant returns (bool success) {
+    ) external onlyOwner whenNotPaused nonReentrant returns (bool success) {
         require(
             _amount <= uint64(type(int64).max),
             "BaseHTSConnector: amount exceeds int64 safe range"
